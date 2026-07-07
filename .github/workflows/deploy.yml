@@ -1,0 +1,51 @@
+name: Deploy Function App
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+env:
+  # Set this to the Function App name created by scripts/provision_azure.ps1
+  AZURE_FUNCTIONAPP_NAME: func-stock-etl
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+      - name: Run tests
+        run: pytest
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    # Skip gracefully on forks / repos where the secret is not configured
+    if: github.repository == 'MasonBrittain/stock-market-etl-pipeline'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Assemble deployment package
+        # The Function needs the pipeline source alongside function_app.py
+        run: cp -r src function_app/src
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy to Azure Functions
+        uses: Azure/functions-action@v1
+        with:
+          app-name: ${{ env.AZURE_FUNCTIONAPP_NAME }}
+          package: function_app
+          scm-do-build-during-deployment: true
+          enable-oryx-build: true
