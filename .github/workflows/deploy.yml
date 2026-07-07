@@ -6,8 +6,8 @@ on:
   workflow_dispatch: {}
 
 env:
-  # Set this to the Function App name created by scripts/provision_azure.ps1
-  AZURE_FUNCTIONAPP_NAME: func-stock-etl
+  # Function App created by scripts/provision_azure.ps1 on 2026-07-07
+  AZURE_FUNCTIONAPP_NAME: func-stock-etl-7420
 
 jobs:
   test:
