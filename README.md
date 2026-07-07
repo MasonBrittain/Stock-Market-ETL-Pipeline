@@ -1,4 +1,6 @@
-# Stock Market ETL Pipeline — Version 2
+# Stock Market ETL Pipeline
+
+[![CI](https://github.com/MasonBrittain/stock-market-etl-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/MasonBrittain/stock-market-etl-pipeline/actions/workflows/ci.yml)
 
 A production-style batch ETL pipeline that downloads historical stock prices
 from Yahoo Finance, validates data quality, and loads results into a star-schema
