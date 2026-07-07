@@ -10,10 +10,13 @@ from __future__ import annotations
 import logging
 from collections.abc import Sequence
 from datetime import date, timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import pandas as pd
 import yfinance as yf
+
+if TYPE_CHECKING:
+    from src.storage import BronzeStorage
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +48,8 @@ def extract_stock_data(
     start_dates: dict[str, date],
     lookback_days: int,
     interval: str = "1d",
+    bronze_storage: "BronzeStorage | None" = None,
+    batch_id: str = "",
 ) -> tuple[pd.DataFrame, list[str]]:
     """Download price history for each ticker from its last stored date forward.
 
@@ -54,6 +59,9 @@ def extract_stock_data(
             Tickers absent from this dict are downloaded from scratch using lookback_days.
         lookback_days: Calendar days to look back for tickers with no stored data.
         interval: yfinance interval string (default "1d").
+        bronze_storage: Optional Bronze-layer writer. When provided, each
+            ticker's raw extract is landed as Parquet before transformation.
+        batch_id: Pipeline run UUID, used in Bronze file names.
 
     Returns:
         A tuple of (combined DataFrame with all downloaded rows, list of tickers that failed).
@@ -104,6 +112,15 @@ def extract_stock_data(
         # adding the Ticker column doesn't corrupt the MultiIndex structure.
         if isinstance(raw.columns, pd.MultiIndex):
             raw.columns = raw.columns.get_level_values(0)
+
+        # Land the raw extract in the Bronze layer before any transformation.
+        # A Bronze failure must not lose the already-downloaded data.
+        if bronze_storage is not None:
+            try:
+                bronze_storage.write_bronze(raw, ticker, batch_id)
+            except Exception:
+                logger.exception("Bronze write failed for %s — continuing", ticker)
+
         raw["Ticker"] = ticker
         frames.append(raw)
         logger.info("Downloaded %d rows for %s", len(raw), ticker)

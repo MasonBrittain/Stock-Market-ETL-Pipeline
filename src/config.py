@@ -32,6 +32,14 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 LOG_DIR = PROJECT_ROOT / os.getenv("LOG_DIR", "logs")
 REPORTS_DIR = PROJECT_ROOT / os.getenv("REPORTS_DIR", "reports")
 
+# --- Bronze layer (raw data landing) ---
+# "local" writes Parquet under data/bronze/; "azure" writes to Blob Storage.
+BRONZE_TARGET = os.getenv("BRONZE_TARGET", "local").lower()
+BRONZE_LOCAL_DIR = PROJECT_ROOT / os.getenv("BRONZE_LOCAL_DIR", "data/bronze")
+AZURE_STORAGE_CONTAINER = os.getenv("AZURE_STORAGE_CONTAINER", "bronze")
+AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+AZURE_STORAGE_ACCOUNT_URL = os.getenv("AZURE_STORAGE_ACCOUNT_URL")
+
 
 def get_database_location() -> str:
     """Return a human-readable database location for pipeline logging."""

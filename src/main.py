@@ -13,6 +13,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.config import (
+    AZURE_STORAGE_ACCOUNT_URL,
+    AZURE_STORAGE_CONNECTION_STRING,
+    AZURE_STORAGE_CONTAINER,
+    BRONZE_LOCAL_DIR,
+    BRONZE_TARGET,
     DATABASE_URL,
     INTERVAL,
     LOOKBACK_DAYS,
@@ -33,6 +38,7 @@ from src.extract import extract_stock_data, fetch_company_info
 from src.load import load_stock_data
 from src.logger import configure_logging
 from src.quality_checks import run_quality_checks, write_quality_report
+from src.storage import create_bronze_storage
 from src.transform import transform_stock_data
 
 
@@ -79,12 +85,24 @@ def main() -> None:
         else:
             logger.info("No stored data found — performing initial load")
 
-        # ── Extract ───────────────────────────────────────────────────────────
+        # ── Bronze storage backend ────────────────────────────────────────────
+        bronze_storage = create_bronze_storage(
+            target=BRONZE_TARGET,
+            local_dir=BRONZE_LOCAL_DIR,
+            azure_container=AZURE_STORAGE_CONTAINER,
+            azure_connection_string=AZURE_STORAGE_CONNECTION_STRING,
+            azure_account_url=AZURE_STORAGE_ACCOUNT_URL,
+        )
+        logger.info("Bronze target: %s", BRONZE_TARGET)
+
+        # ── Extract (raw data lands in Bronze per ticker) ─────────────────────
         raw_data, failed_tickers = extract_stock_data(
             tickers=TICKERS,
             start_dates=start_dates,
             lookback_days=LOOKBACK_DAYS,
             interval=INTERVAL,
+            bronze_storage=bronze_storage,
+            batch_id=batch_id,
         )
 
         # ── Transform ─────────────────────────────────────────────────────────

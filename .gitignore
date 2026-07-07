@@ -9,6 +9,7 @@ venv/
 data/*.db
 data/*.sqlite
 data/*.sqlite3
+data/bronze/
 
 # Pipeline outputs (keep directory structure via .gitkeep)
 logs/*.log
