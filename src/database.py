@@ -45,7 +45,7 @@ pipeline_runs_table = Table(
     Column("started_at", DateTime, nullable=False),
     Column("completed_at", DateTime),
     Column("status", String(10), nullable=False),
-    Column("tickers", Text),
+    Column("tickers", String(500)),
     Column("rows_extracted", Integer),
     Column("rows_inserted", Integer),
     Column("rows_skipped", Integer),
@@ -58,9 +58,9 @@ dim_company_table = Table(
     metadata,
     Column("company_id", Integer, primary_key=True, autoincrement=True),
     Column("ticker", String(10), unique=True, nullable=False),
-    Column("company_name", Text),
-    Column("sector", Text),
-    Column("industry", Text),
+    Column("company_name", String(255)),
+    Column("sector", String(100)),
+    Column("industry", String(100)),
     Column("created_at", DateTime, nullable=False),
     Column("updated_at", DateTime, nullable=False),
 )
@@ -68,7 +68,9 @@ dim_company_table = Table(
 dim_date_table = Table(
     "dim_date",
     metadata,
-    Column("date_id", Integer, primary_key=True),  # YYYYMMDD integer
+    # autoincrement=False: we insert explicit YYYYMMDD keys; without it,
+    # SQL Server makes an int PK an IDENTITY column and rejects explicit values.
+    Column("date_id", Integer, primary_key=True, autoincrement=False),
     Column("full_date", DateTime, unique=True, nullable=False),
     Column("year", Integer),
     Column("quarter", Integer),
@@ -105,7 +107,13 @@ fact_stock_prices_table = Table(
 
 
 def create_db_engine(database_url: str) -> Engine:
-    """Create and return a SQLAlchemy engine."""
+    """Create and return a SQLAlchemy engine.
+
+    For Azure SQL (mssql+pyodbc), fast_executemany batches inserts at the
+    driver level — without it, executemany sends one round-trip per row.
+    """
+    if database_url.startswith("mssql"):
+        return create_engine(database_url, fast_executemany=True)
     return create_engine(database_url)
 
 

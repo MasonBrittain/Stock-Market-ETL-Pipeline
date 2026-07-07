@@ -1,8 +1,15 @@
-# Stock Market ETL Pipeline — Version 2
+# Stock Market ETL Pipeline
 
-A production-style batch ETL pipeline that downloads historical stock prices
-from Yahoo Finance, validates data quality, and loads results into a star-schema
-SQLite database with full run auditing.
+[![CI](https://github.com/MasonBrittain/stock-market-etl-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/MasonBrittain/stock-market-etl-pipeline/actions/workflows/ci.yml)
+
+A cloud-native batch ETL pipeline that downloads historical stock prices from
+Yahoo Finance, lands raw data in a Bronze layer (Parquet), validates data
+quality, and loads a star-schema warehouse — SQLite locally, Azure SQL in the
+cloud — with full run auditing, scheduled execution on Azure Functions, and
+CI/CD via GitHub Actions.
+
+**Runs 100% locally with zero cloud dependencies by default.** Azure targets
+are opt-in via configuration.
 
 ---
 
@@ -32,7 +39,7 @@ Yahoo Finance API (yfinance)
   └───────┬───────┘
           │
           ▼
-  SQLite Database
+  Warehouse (SQLite local · Azure SQL cloud)
   ├── dim_company          (who)
   ├── dim_date             (when — pre-seeded 2000–2035)
   ├── fact_stock_prices    (measures + FKs + batch_id)
@@ -43,8 +50,28 @@ Yahoo Finance API (yfinance)
   logs/pipeline.log
 ```
 
-> **Future:** Azure Blob Storage (Bronze) → Azure SQL / Fabric (Silver/Gold)
-> → Power BI connected to Azure → CI/CD with GitHub Actions
+### Cloud deployment (V3)
+
+```
+              GitHub push to main
+                     │
+        GitHub Actions: test → deploy
+                     │
+                     ▼
+   Azure Functions (timer, weekdays 22:30 UTC)
+                     │ runs run_pipeline()
+        ┌────────────┴────────────┐
+        ▼                         ▼
+  Azure Blob Storage        Azure SQL Database
+  bronze/ticker=X/year=Y    (serverless free tier)
+  raw Parquet extracts      star schema + audit
+                                  │
+                                  ▼
+                            Power BI Desktop
+```
+
+Extraction lands raw Parquet in Bronze *before* transformation, so any batch
+can be reprocessed without re-calling the Yahoo Finance API.
 
 ---
 
@@ -52,26 +79,31 @@ Yahoo Finance API (yfinance)
 
 ```
 stock-market-etl-pipeline/
+├── .github/workflows/
+│   ├── ci.yml              Tests + coverage on every push and PR
+│   └── deploy.yml          Function App deployment on merge to main
 ├── src/
-│   ├── config.py           Configuration (tickers, DB URL, log settings)
+│   ├── config.py           Configuration (tickers, DB URL, Bronze target, logging)
 │   ├── logger.py           Rotating file + console logging with batch_id
 │   ├── database.py         Schema definitions, dim seeding, utility queries
+│   ├── storage.py          Bronze backends: local Parquet or Azure Blob
 │   ├── extract.py          Per-ticker incremental download from Yahoo Finance
 │   ├── transform.py        Clean, coerce, and calculate daily returns
 │   ├── quality_checks.py   9 validation checks + JSON report writer
 │   ├── load.py             Incremental insert into fact_stock_prices
-│   └── main.py             Pipeline orchestrator with audit and error handling
-├── tests/
-│   ├── conftest.py         Shared fixtures (in-memory DB engine)
-│   ├── test_transform.py
-│   ├── test_quality_checks.py
-│   ├── test_quality_report.py
-│   ├── test_incremental.py
-│   ├── test_audit.py
-│   └── test_dim_date.py
+│   └── main.py             run_pipeline() core + CLI entry point
+├── function_app/
+│   ├── function_app.py     Azure Functions timer trigger (weekdays 22:30 UTC)
+│   ├── host.json
+│   ├── requirements.txt
+│   └── local.settings.json.example
+├── tests/                  27 tests — all runnable without cloud credentials
 ├── scripts/
-│   └── migrate_v1_to_v2.py   One-time migration for existing V1 databases
-├── data/                   SQLite database (created on first run)
+│   ├── migrate_v1_to_v2.py   One-time migration for existing V1 databases
+│   └── provision_azure.ps1   Annotated az CLI script — creates all resources
+├── docs/
+│   └── powerbi.md          Power BI connection guide + DAX measures
+├── data/                   SQLite database + bronze/ Parquet (local mode)
 ├── logs/                   Rotating log files
 ├── reports/                JSON quality reports (one per run)
 ├── .env.example            All configurable settings with defaults
@@ -202,6 +234,65 @@ ticker are downloaded. `Rows inserted` will be 0 or a small number.
 
 ---
 
+## Cloud Deployment (Azure)
+
+### Local vs. cloud configuration
+
+| Setting | Local (default) | Cloud |
+|---|---|---|
+| `BRONZE_TARGET` | `local` → `data/bronze/` Parquet | `azure` → Blob Storage container |
+| `DATABASE_URL` | `sqlite:///data/stock_market.db` | `mssql+pyodbc://...database.windows.net...` |
+| Scheduling | manual / Task Scheduler / cron | Azure Functions timer (weekdays 22:30 UTC) |
+| Secrets | `.env` file (gitignored) | Function App settings + GitHub secrets |
+
+The same code runs in both modes — only configuration changes.
+
+### Provisioning
+
+```powershell
+az login
+.\scripts\provision_azure.ps1
+```
+
+The script creates every resource with inline cost annotations: resource
+group, storage account + `bronze` container, Azure SQL serverless free-tier
+database, Function App (Consumption plan), and the GitHub Actions service
+principal. Run it section by section the first time.
+
+For Azure SQL you also need the
+[Microsoft ODBC Driver 18 for SQL Server](https://learn.microsoft.com/sql/connect/odbc/download-odbc-driver-for-sql-server)
+installed locally (`winget install Microsoft.msodbcsql18`).
+
+### Where each secret lives
+
+| Secret | Location | Used by |
+|---|---|---|
+| SQL connection string | `.env` (local) / Function App settings (cloud) | Pipeline warehouse writes |
+| Storage connection string | `.env` (local) / Function App settings (cloud) | Bronze uploads |
+| Service principal JSON | GitHub repo secret `AZURE_CREDENTIALS` | Deploy workflow only |
+
+No secret is ever committed. `.env`, `local.settings.json`, and
+`function_app/src/` are gitignored.
+
+### Monthly cost
+
+| Resource | Tier | Cost at this workload |
+|---|---|---|
+| Azure SQL Database | Serverless free tier (100K vCore-s/mo, auto-pause) | $0 |
+| Blob Storage | Standard LRS, < 100 MB | ~ $0.01 |
+| Azure Functions | Consumption plan (1M free executions/mo) | $0 |
+| Application Insights | Basic (first 5 GB/mo free) | $0 |
+| **Total** | | **≈ $0–1/month** |
+
+### Deploying
+
+Merging to `main` triggers `deploy.yml`: tests run first, then the Function
+App is packaged (pipeline `src/` copied alongside the trigger) and published.
+Manual deployment: `func azure functionapp publish <app-name>` from
+`function_app/` after copying `src/` in.
+
+---
+
 ## How Incremental Loading Works
 
 On every run, the pipeline queries `MAX(price_date)` from `fact_stock_prices`
@@ -276,19 +367,28 @@ pytest
 | `test_incremental.py` | Last-date queries, overlap dedup, idempotent reruns |
 | `test_audit.py` | SUCCESS and FAILED audit rows in pipeline_runs |
 | `test_dim_date.py` | dim_date seeding, weekday/quarter correctness |
+| `test_storage.py` | Bronze partitioning, local Parquet round-trip, mocked Azure uploads |
+
+All tests run without cloud credentials — Azure SDK calls are mocked.
 
 ---
 
 ---
 
-## Future Roadmap
+## Roadmap
 
-**Version 3 — Cloud Migration**
-- Azure Blob Storage as Bronze landing zone
-- Azure SQL Database or Microsoft Fabric Warehouse for Silver/Gold
-- Azure Data Factory or Azure Functions for orchestration
-- Power BI connected to Azure SQL
-- CI/CD pipeline with GitHub Actions
+**Version 3 — Cloud Migration ✅ (current)**
+- ✅ Azure Blob Storage Bronze landing zone (Parquet, partitioned)
+- ✅ Azure SQL Database serverless warehouse
+- ✅ Azure Functions timer orchestration
+- ✅ Power BI connection guide with DAX measures
+- ✅ CI/CD with GitHub Actions
+
+**Version 3.5 — candidates**
+- Azure Data Factory orchestration as an alternative to Functions
+- Microsoft Fabric Warehouse migration
+- Azure Key Vault for secret management
+- Infrastructure as code (Bicep)
 
 **Version 4 — Streaming**
 - Azure Event Hubs (Kafka-compatible) for real-time tick ingestion
