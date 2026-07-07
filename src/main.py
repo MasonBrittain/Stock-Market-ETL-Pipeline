@@ -223,9 +223,12 @@ def main() -> None:
     """CLI entry point: run the pipeline, print a summary, exit non-zero on failure."""
     result = run_pipeline()
 
+    # ASCII-only console output: Windows consoles default to cp1252 when
+    # stdout is piped, and non-ASCII box characters raise UnicodeEncodeError.
+    divider = "-" * 60
     if result["status"] == "SUCCESS":
-        print("\n── ETL Pipeline V3 ─────────────────────────────────────────")
-        print(f"  Status          : SUCCESS")
+        print(f"\n{divider}")
+        print("  ETL Pipeline V3 : SUCCESS")
         print(f"  Batch ID        : {result['batch_id']}")
         print(f"  Tickers         : {', '.join(TICKERS)}")
         if result["failed_tickers"]:
@@ -236,12 +239,13 @@ def main() -> None:
         print(f"  Quality passed  : {result['quality_passed']}")
         print(f"  Elapsed         : {result['execution_time_seconds']}s")
         print(f"  Database        : {get_database_location()}")
-        print("────────────────────────────────────────────────────────────\n")
+        print(f"{divider}\n")
     else:
-        print("\n── ETL Pipeline V3 — FAILED ─────────────────────────────────")
+        print(f"\n{divider}")
+        print("  ETL Pipeline V3 : FAILED")
         print(f"  Batch ID : {result['batch_id']}")
         print(f"  Error    : {result['error']}")
-        print("─────────────────────────────────────────────────────────────\n")
+        print(f"{divider}\n")
         sys.exit(1)
 
 
