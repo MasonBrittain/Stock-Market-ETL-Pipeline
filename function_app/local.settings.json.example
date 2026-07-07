@@ -1,0 +1,15 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "python",
+    "TICKERS": "AAPL,MSFT,NVDA,GOOGL,AMZN",
+    "INTERVAL": "1d",
+    "LOOKBACK_DAYS": "730",
+    "DATABASE_URL": "mssql+pyodbc://<user>:<password>@<server>.database.windows.net:1433/stockmarket?driver=ODBC+Driver+18+for+SQL+Server",
+    "BRONZE_TARGET": "azure",
+    "AZURE_STORAGE_CONTAINER": "bronze",
+    "AZURE_STORAGE_CONNECTION_STRING": "<storage-connection-string>",
+    "LOG_LEVEL": "INFO"
+  }
+}
