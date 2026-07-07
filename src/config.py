@@ -42,7 +42,10 @@ AZURE_STORAGE_ACCOUNT_URL = os.getenv("AZURE_STORAGE_ACCOUNT_URL")
 
 
 def get_database_location() -> str:
-    """Return a human-readable database location for pipeline logging."""
+    """Return a human-readable database location for pipeline logging.
+
+    Never returns credentials: non-SQLite URLs are reduced to host/database.
+    """
     if DATABASE_URL.startswith("sqlite:///"):
         database_value = DATABASE_URL.removeprefix("sqlite:///")
         database_path = Path(database_value)
@@ -52,4 +55,11 @@ def get_database_location() -> str:
             except ValueError:
                 return str(database_path)
         return str(database_path)
-    return DATABASE_URL
+
+    from sqlalchemy.engine import make_url
+
+    try:
+        url = make_url(DATABASE_URL)
+        return f"{url.drivername}://{url.host}/{url.database}"
+    except Exception:
+        return "<database url hidden>"

@@ -68,7 +68,9 @@ dim_company_table = Table(
 dim_date_table = Table(
     "dim_date",
     metadata,
-    Column("date_id", Integer, primary_key=True),  # YYYYMMDD integer
+    # autoincrement=False: we insert explicit YYYYMMDD keys; without it,
+    # SQL Server makes an int PK an IDENTITY column and rejects explicit values.
+    Column("date_id", Integer, primary_key=True, autoincrement=False),
     Column("full_date", DateTime, unique=True, nullable=False),
     Column("year", Integer),
     Column("quarter", Integer),
