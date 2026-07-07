@@ -29,7 +29,7 @@ jobs:
     needs: test
     runs-on: ubuntu-latest
     # Skip gracefully on forks / repos where the secret is not configured
-    if: github.repository == 'MasonBrittain/stock-market-etl-pipeline'
+    if: github.repository == 'MasonBrittain/Stock-Market-ETL-Pipeline'
     steps:
       - uses: actions/checkout@v4
 
