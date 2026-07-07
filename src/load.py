@@ -86,12 +86,15 @@ def load_stock_data(
         logger.info("All %d rows already exist in the database — nothing to insert", skipped)
         return 0, skipped
 
+    # Plain executemany in chunks. method="multi" builds one giant statement
+    # that exceeds pyodbc's 2100-parameter limit on Azure SQL; executemany
+    # (with fast_executemany enabled on mssql engines) is fast and portable.
     new_rows.to_sql(
         "fact_stock_prices",
         engine,
         if_exists="append",
         index=False,
-        method="multi",
+        chunksize=500,
     )
     logger.info("Inserted %d rows | skipped %d existing rows", len(new_rows), skipped)
     return len(new_rows), skipped
