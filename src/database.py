@@ -82,6 +82,36 @@ dim_date_table = Table(
     Column("is_weekend", Boolean),
 )
 
+fact_intraday_bars_table = Table(
+    "fact_intraday_bars",
+    metadata,
+    Column("ticker", String(10), nullable=False),
+    Column("window_start", DateTime, nullable=False),
+    Column("window_end", DateTime, nullable=False),
+    Column("open", Float),
+    Column("high", Float),
+    Column("low", Float),
+    Column("close", Float),
+    Column("volume", BigInteger),
+    Column("tick_count", Integer),
+    Column("avg_close_5min", Float),
+    Column("processed_at", DateTime, nullable=False),
+    UniqueConstraint("ticker", "window_start", name="uq_intraday_ticker_window"),
+)
+
+alerts_table = Table(
+    "alerts",
+    metadata,
+    Column("alert_id", Integer, primary_key=True, autoincrement=True),
+    Column("ticker", String(10), nullable=False),
+    Column("window_start", DateTime, nullable=False),
+    Column("close", Float),
+    Column("reference_avg", Float),
+    Column("move_pct", Float),
+    Column("threshold_pct", Float),
+    Column("created_at", DateTime, nullable=False),
+)
+
 fact_stock_prices_table = Table(
     "fact_stock_prices",
     metadata,

@@ -1,0 +1,63 @@
+# Streaming stack: Kafka (KRaft) + replay producer + Spark processor.
+#
+#   docker compose -f streaming/docker-compose.streaming.yml up --build
+#
+# Reads Bronze Parquet from ../data/bronze (run the batch pipeline once first)
+# and writes 1-minute bars to ../data/stock_market.db (fact_intraday_bars).
+# Kafka is reachable from the host at localhost:9094 for streaming/monitor.py.
+
+services:
+  kafka:
+    image: bitnami/kafka:3.7
+    ports:
+      - "9094:9094"
+    environment:
+      KAFKA_CFG_NODE_ID: "0"
+      KAFKA_CFG_PROCESS_ROLES: controller,broker
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 0@kafka:9093
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+
+  producer:
+    build:
+      context: ..
+      dockerfile: streaming/producer/Dockerfile
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      BRONZE_DIR: /data/bronze
+      REPLAY_SPEED: "${REPLAY_SPEED:-10}"
+      PRODUCER_ID: replay-1
+    volumes:
+      - ../data:/data
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: on-failure
+
+  processor:
+    build:
+      context: ..
+      dockerfile: streaming/processor/Dockerfile
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      DATABASE_URL: "${STREAM_DATABASE_URL:-sqlite:////data/stock_market.db}"
+      ALERT_THRESHOLD_PCT: "${ALERT_THRESHOLD_PCT:-2.0}"
+      CHECKPOINT_DIR: /checkpoints
+    volumes:
+      - ../data:/data
+      - checkpoints:/checkpoints
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: on-failure
+
+volumes:
+  checkpoints:
