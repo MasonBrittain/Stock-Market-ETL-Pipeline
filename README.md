@@ -2,11 +2,13 @@
 
 [![CI](https://github.com/MasonBrittain/stock-market-etl-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/MasonBrittain/stock-market-etl-pipeline/actions/workflows/ci.yml)
 
-A cloud-native batch ETL pipeline that downloads historical stock prices from
-Yahoo Finance, lands raw data in a Bronze layer (Parquet), validates data
-quality, and loads a star-schema warehouse — SQLite locally, Azure SQL in the
-cloud — with full run auditing, scheduled execution on Azure Functions, and
-CI/CD via GitHub Actions.
+A cloud-native data platform with two lanes: a **batch ETL pipeline** that
+downloads historical stock prices from Yahoo Finance into a star-schema
+warehouse (SQLite locally, Azure SQL in the cloud), and a **streaming lane**
+where Kafka and Spark Structured Streaming aggregate tick messages into
+1-minute intraday bars in near real time. Includes a Bronze Parquet landing
+layer, a 9-check data quality framework, full run auditing, scheduled
+execution on Azure Functions, and CI/CD via GitHub Actions.
 
 **Runs 100% locally with zero cloud dependencies by default.** Azure targets
 are opt-in via configuration.
@@ -73,6 +75,26 @@ Yahoo Finance API (yfinance)
 Extraction lands raw Parquet in Bronze *before* transformation, so any batch
 can be reprocessed without re-calling the Yahoo Finance API.
 
+### Streaming lane (V4)
+
+```
+Bronze Parquet ──▶ Replay Producer ──▶ Kafka (KRaft, Docker)
+                                          │
+                        ┌─────────────────┴───────┐
+                        ▼                         ▼
+              Spark Structured Streaming   stock-ticks-dlq
+              1-min OHLCV bars, 30s        (malformed messages)
+              watermark, checkpointed
+                        │
+                        ▼
+         fact_intraday_bars + alerts (same warehouse)
+```
+
+The producer replays historical Bronze data as a simulated live feed —
+deterministic, demo-able any time, and swapping in a real feed is a
+producer-only change. Azure Event Hubs (Kafka-compatible endpoint) is the
+documented cloud opt-in. See [docs/streaming.md](docs/streaming.md).
+
 ---
 
 ## Project Structure
@@ -97,12 +119,19 @@ stock-market-etl-pipeline/
 │   ├── host.json
 │   ├── requirements.txt
 │   └── local.settings.json.example
-├── tests/                  27 tests — all runnable without cloud credentials
+├── streaming/
+│   ├── docker-compose.streaming.yml   Kafka (KRaft) + producer + Spark
+│   ├── common/ticks.py     Shared tick schema, validation, alert rules
+│   ├── producer/           Replays Bronze Parquet to Kafka as tick messages
+│   ├── processor/          Spark job: 1-min OHLCV bars → warehouse
+│   └── monitor.py          Consumer-lag + throughput health CLI
+├── tests/                  45 tests — all runnable without cloud credentials
 ├── scripts/
 │   ├── migrate_v1_to_v2.py   One-time migration for existing V1 databases
 │   └── provision_azure.ps1   Annotated az CLI script — creates all resources
 ├── docs/
-│   └── powerbi.md          Power BI connection guide + DAX measures
+│   ├── powerbi.md          Power BI connection guide + DAX measures
+│   └── streaming.md        Streaming quickstart, semantics, troubleshooting
 ├── data/                   SQLite database + bronze/ Parquet (local mode)
 ├── logs/                   Rotating log files
 ├── reports/                JSON quality reports (one per run)
@@ -368,8 +397,10 @@ pytest
 | `test_audit.py` | SUCCESS and FAILED audit rows in pipeline_runs |
 | `test_dim_date.py` | dim_date seeding, weekday/quarter correctness |
 | `test_storage.py` | Bronze partitioning, local Parquet round-trip, mocked Azure uploads |
+| `test_streaming_common.py` | Tick schema/validation, replay pacing, alert threshold rules |
 
-All tests run without cloud credentials — Azure SDK calls are mocked.
+All tests run without cloud credentials or a message broker — Azure SDK calls
+are mocked and streaming logic is factored into pure functions.
 
 ---
 
@@ -390,9 +421,15 @@ All tests run without cloud credentials — Azure SDK calls are mocked.
 - Azure Key Vault for secret management
 - Infrastructure as code (Bicep)
 
-**Version 4 — Streaming**
-- Azure Event Hubs (Kafka-compatible) for real-time tick ingestion
-- Spark Structured Streaming or Databricks for near-real-time processing
-- Monitoring and alerting with Azure Monitor
+**Version 4 — Streaming ✅ (current)**
+- ✅ Kafka (KRaft) in Docker with replay-based tick simulation
+- ✅ Spark Structured Streaming: 1-min OHLCV bars, watermarks, checkpointing, DLQ
+- ✅ Price-move alerting + consumer-lag health monitoring
+- ✅ Azure Event Hubs documented as Kafka-compatible cloud opt-in
+
+**Future**
+- Live market data feed (WebSocket) into the existing producer
+- Databricks / Microsoft Fabric Real-Time Intelligence
+- Azure Key Vault, infrastructure as code (Bicep)
 
 ---

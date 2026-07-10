@@ -117,3 +117,37 @@ Write-Host "  1. Copy the storage connection string into .env"
 Write-Host "  2. Copy DATABASE_URL into .env (and Function App settings)"
 Write-Host "  3. Save the service principal JSON as the AZURE_CREDENTIALS GitHub secret"
 Write-Host "  4. Set Function App settings: az functionapp config appsettings set"
+
+# ── OPTIONAL: Event Hubs for cloud streaming (V4) ─────────────────────────────
+# NOT free: Basic tier is ~$11/month per throughput unit while it exists.
+# The local Kafka stack (streaming/docker-compose.streaming.yml) is $0 and is
+# the default. Create this only for cloud demos, then tear it down.
+#
+# Event Hubs exposes a Kafka-compatible endpoint, so the producer/processor
+# use it by changing config only (see docs/streaming.md).
+#
+# $EH_NAMESPACE = "eh-stock-etl-$(Get-Random -Maximum 9999)"
+#
+# az eventhubs namespace create `
+#     --name $EH_NAMESPACE `
+#     --resource-group $RG `
+#     --location $LOCATION `
+#     --sku Basic `
+#     --capacity 1
+#
+# az eventhubs eventhub create `
+#     --name stock-ticks `
+#     --namespace-name $EH_NAMESPACE `
+#     --resource-group $RG `
+#     --partition-count 2 `
+#     --retention-time 1
+#
+# Connection string for .env (KAFKA_SASL_CONNECTION_STRING):
+# az eventhubs namespace authorization-rule keys list `
+#     --namespace-name $EH_NAMESPACE `
+#     --resource-group $RG `
+#     --name RootManageSharedAccessKey `
+#     --query primaryConnectionString --output tsv
+#
+# TEARDOWN when the demo is over (stops all charges):
+# az eventhubs namespace delete --name $EH_NAMESPACE --resource-group $RG
