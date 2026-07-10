@@ -151,12 +151,19 @@ def write_bars_batch(batch_df: DataFrame, batch_id: int) -> None:
             inserted = 0
             alerts = 0
             for row in bars.itertuples(index=False):
+                # Coerce numpy/pandas scalars from toPandas() to native Python
+                # types — the sqlite3 driver cannot bind numpy.float64 etc.
+                ticker = str(row.ticker)
+                window_start = row.window_start.to_pydatetime()
+                window_end = row.window_end.to_pydatetime()
+                close = float(row.close)
+
                 exists = conn.execute(
                     text(
                         "SELECT 1 FROM fact_intraday_bars "
                         "WHERE ticker = :t AND window_start = :ws"
                     ),
-                    {"t": row.ticker, "ws": row.window_start},
+                    {"t": ticker, "ws": window_start},
                 ).fetchone()
                 if exists:
                     continue
@@ -167,13 +174,11 @@ def write_bars_batch(batch_df: DataFrame, batch_id: int) -> None:
                         "WHERE ticker = :t AND window_start >= :cutoff"
                     ),
                     {
-                        "t": row.ticker,
-                        "cutoff": row.window_start - timedelta(minutes=5),
+                        "t": ticker,
+                        "cutoff": window_start - timedelta(minutes=5),
                     },
                 ).scalar()
-                avg_5min = (
-                    (ref * 1.0 + row.close) / 2 if ref is not None else row.close
-                )
+                avg_5min = (ref * 1.0 + close) / 2 if ref is not None else close
 
                 conn.execute(
                     text(
@@ -183,23 +188,23 @@ def write_bars_batch(batch_df: DataFrame, batch_id: int) -> None:
                         ":h, :l, :c, :v, :n, :a, :p)"
                     ),
                     {
-                        "t": row.ticker,
-                        "ws": row.window_start,
-                        "we": row.window_end,
-                        "o": row.open,
-                        "h": row.high,
-                        "l": row.low,
-                        "c": row.close,
+                        "t": ticker,
+                        "ws": window_start,
+                        "we": window_end,
+                        "o": float(row.open),
+                        "h": float(row.high),
+                        "l": float(row.low),
+                        "c": close,
                         "v": int(row.volume),
                         "n": int(row.tick_count),
-                        "a": avg_5min,
+                        "a": float(avg_5min),
                         "p": now,
                     },
                 )
                 inserted += 1
 
-                if ref is not None and should_alert(row.close, ref, ALERT_THRESHOLD_PCT):
-                    move = price_move_pct(row.close, ref)
+                if ref is not None and should_alert(close, float(ref), ALERT_THRESHOLD_PCT):
+                    move = price_move_pct(close, float(ref))
                     conn.execute(
                         text(
                             "INSERT INTO alerts (ticker, window_start, close, "
@@ -207,10 +212,10 @@ def write_bars_batch(batch_df: DataFrame, batch_id: int) -> None:
                             "VALUES (:t, :ws, :c, :r, :m, :th, :ca)"
                         ),
                         {
-                            "t": row.ticker,
-                            "ws": row.window_start,
-                            "c": row.close,
-                            "r": ref,
+                            "t": ticker,
+                            "ws": window_start,
+                            "c": close,
+                            "r": float(ref),
                             "m": move,
                             "th": ALERT_THRESHOLD_PCT,
                             "ca": now,
@@ -219,9 +224,9 @@ def write_bars_batch(batch_df: DataFrame, batch_id: int) -> None:
                     alerts += 1
                     logger.warning(
                         "ALERT %s moved %.2f%% vs 5-min avg in window %s",
-                        row.ticker,
+                        ticker,
                         move,
-                        row.window_start,
+                        window_start,
                     )
 
         logger.info(

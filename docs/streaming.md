@@ -82,8 +82,11 @@ docker compose -f streaming/docker-compose.streaming.yml exec kafka `
 and alert totals; it exits non-zero when lag exceeds `--max-lag` (default
 1000), so it can run as a scheduled health check.
 
-Healthy looks like: lag near zero, `bars_last_5min` > 0 while the producer
-runs, `latest_processed_at` within the last minute.
+Healthy looks like: `bars_last_5min` > 0 while the producer runs and
+`latest_processed_at` within the last minute. Consumer lag usually shows
+`n/a` — Spark Structured Streaming tracks offsets in its checkpoint rather
+than committing to Kafka consumer groups, so the freshness signal to watch
+is `latest_processed_at`.
 
 ## Cloud Option: Azure Event Hubs (~$11/month — off by default)
 

@@ -27,7 +27,14 @@ def get_consumer_lag(bootstrap: str, topic: str) -> int | None:
 
     admin = KafkaAdminClient(bootstrap_servers=bootstrap)
     try:
-        groups = [g[0] for g in admin.list_consumer_groups()]
+        # kafka-python 3.x renamed the admin group APIs; support both.
+        if hasattr(admin, "list_groups"):
+            groups = [g[0] for g in admin.list_groups()]
+            fetch_offsets = admin.list_group_offsets
+        else:
+            groups = [g[0] for g in admin.list_consumer_groups()]
+            fetch_offsets = admin.list_consumer_group_offsets
+
         spark_groups = [g for g in groups if g.startswith("spark-kafka-source")]
         if not spark_groups:
             return None
@@ -44,7 +51,7 @@ def get_consumer_lag(bootstrap: str, topic: str) -> int | None:
 
             total_lag = 0
             for group in spark_groups:
-                committed = admin.list_consumer_group_offsets(group)
+                committed = fetch_offsets(group)
                 for tp, meta in committed.items():
                     if tp.topic == topic and meta.offset >= 0:
                         total_lag += max(0, end_offsets.get(tp, 0) - meta.offset)
