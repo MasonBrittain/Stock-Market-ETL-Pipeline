@@ -263,6 +263,27 @@ ticker are downloaded. `Rows inserted` will be 0 or a small number.
 
 ---
 
+## Demo
+
+<!--
+  Add a short screen recording or a few screenshots here showing:
+    1. `python -m src.main` running end to end (console SUCCESS summary)
+    2. A query against the warehouse showing loaded rows
+       (e.g. SELECT * FROM fact_stock_prices ORDER BY price_date DESC LIMIT 10)
+    3. The streaming stack: `docker compose -f streaming/docker-compose.streaming.yml up`
+       followed by rows appearing in fact_intraday_bars
+    4. Power BI dashboard connected to the warehouse (see docs/powerbi.md)
+
+  A GIF or short MP4 embedded below is the highest-impact addition here —
+  it lets a reader verify the pipeline works without cloning and running it.
+-->
+
+| Batch pipeline | Streaming pipeline |
+|---|---|
+| _screenshot/GIF here_ | _screenshot/GIF here_ |
+
+---
+
 ## Cloud Deployment (Azure)
 
 ### Local vs. cloud configuration
@@ -401,8 +422,6 @@ pytest
 
 All tests run without cloud credentials or a message broker — Azure SDK calls
 are mocked and streaming logic is factored into pure functions.
-
----
 
 ---
 
