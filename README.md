@@ -1,6 +1,6 @@
 # Stock Market ETL Pipeline
 
-[![CI](https://github.com/MasonBrittain/stock-market-etl-pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/MasonBrittain/stock-market-etl-pipeline/actions/workflows/ci.yml)
+[![CI](https://github.com/MasonBrittain/Stock-Market-ETL-Pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/MasonBrittain/Stock-Market-ETL-Pipeline/actions/workflows/ci.yml)
 
 A cloud-native data platform with two lanes: a **batch ETL pipeline** that
 downloads historical stock prices from Yahoo Finance into a star-schema
