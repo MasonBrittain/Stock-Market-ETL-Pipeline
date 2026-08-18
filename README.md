@@ -427,6 +427,8 @@ are mocked and streaming logic is factored into pure functions.
 
 ## Roadmap
 
+See [CHANGELOG.md](CHANGELOG.md) for the full version history (V1 → V4).
+
 **Version 3 — Cloud Migration ✅ (current)**
 - ✅ Azure Blob Storage Bronze landing zone (Parquet, partitioned)
 - ✅ Azure SQL Database serverless warehouse
